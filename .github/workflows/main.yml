@@ -69,6 +69,55 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           name: ${{ env.RELEASE_NAME }}
           files: ${{ env.FILENAME }}
+  build-release-windows-standalone:
+    needs: build-windows
+    if: startsWith(github.ref, 'refs/tags/junowen-v')
+    runs-on: ubuntu-latest
+    env:
+      FILENAME: ${{ github.ref_name }}-standalone.zip
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/cache@v3
+        with:
+          path: ~/.cargo/git
+          key: cargo-index-${{ hashFiles('**/Cargo.lock') }}
+      - uses: actions/cache@v3
+        with:
+          path: ~/.cargo/registry
+          key: cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+      - uses: actions/cache@v3
+        with:
+          path: target
+          key: cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+      - name: Init Rust
+        shell: bash
+        run: |
+          rustup target add i686-pc-windows-msvc
+          cargo install cargo-bundle-licenses
+      - name: Build
+        shell: bash
+        run: |
+          cargo build --locked --release --package junowen --features simple-dll-injection
+          cargo build --locked --release --package junowen --bin junowen-standalone
+          cargo bundle-licenses --format yaml --output THIRDPARTY.yml
+          mv \
+            target/i686-pc-windows-msvc/release/th19_junowen.dll \
+            junowen.dll
+          mv \
+            target/i686-pc-windows-msvc/release/junowen-standalone.exe \
+            junowen.exe
+          mv LICENSE README.md THIRDPARTY.yml .
+
+          zip ${{ env.FILENAME }} junowen.dll junowen.exe LICENSE README.md THIRDPARTY.yml
+
+          ref_name=${{github.ref_name}}
+          echo "RELEASE_NAME=${ref_name/junowen-/Ju.N.Owen }" >> "$GITHUB_ENV"
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          name: ${{ env.RELEASE_NAME }}
+          files: ${{ env.FILENAME }}
   build-server:
     runs-on: ubuntu-latest
     steps:
